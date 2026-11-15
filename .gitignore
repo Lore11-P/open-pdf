@@ -1,0 +1,26 @@
+# Build Rust/Tauri
+/target/
+/gen/
+
+# Applicazione compilata e installer
+/Open PDF/
+*.lnk
+*.exe.new
+*.exe.old
+
+# Decompilato di binari Adobe (non ridistribuibile) e dati grezzi della sessione REA.
+# Restano solo in locale: il report leggibile è in docs/reverse-engineering-acrobat.md.
+/docs/ghidra/DigSig.api/
+/docs/ghidra/PPKLite.api/
+/docs/rea-acrobat-session.json
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.pdb
+
+# Ambiente locale
+.env
+.env.*

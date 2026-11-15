@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Open PDF · Focus Dark</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="theme-focus.css">
+  <link rel="stylesheet" href="refine.css">
+  <link rel="stylesheet" href="refine.css">
+</head>
+<body>
+  <div class="bg">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+    <span class="grain"></span>
+  </div>
+
+  <div class="shell" id="shell">
+    <header class="topbar glass">
+      <div class="brand">
+        <div class="brand-mark">
+          <span class="mark-page"></span>
+          <span class="mark-glow"></span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">Open <b>PDF</b></div>
+          <div class="brand-tag">Focus Dark</div>
+        </div>
+      </div>
+
+      <div class="doc-heading">
+        <div class="doc-title" id="docTitle">Nessun documento aperto</div>
+        <div class="doc-path" id="docPath">Tutto in locale · nessun dato inviato</div>
+      </div>
+
+      <div class="top-actions">
+        <div class="searchbox" id="searchBox">
+          <span class="search-icon" id="searchIcon"></span>
+          <input id="searchInput" placeholder="Cerca nel documento" autocomplete="off" spellcheck="false">
+          <kbd>Ctrl K</kbd>
+          <div class="search-popover glass" id="searchPopover"></div>
+        </div>
+        <button class="icon-btn" id="voiceBtn" title="Lettura ad alta voce"></button>
+        <button class="icon-btn" id="shareBtn" title="Revisione collaborativa locale"></button>
+        <div class="top-divider"></div>
+        <button class="btn ghost" id="saveBtn"><span id="saveIcon"></span>Salva</button>
+        <button class="btn primary" id="openBtn"><span id="openIcon"></span>Apri PDF</button>
+      </div>
+    </header>
+
+    <aside class="sidebar glass">
+      <div class="open-card">
+        <button class="open-drop" id="openDrop">
+          <span class="open-drop-icon" id="dropIcon"></span>
+          <span class="open-drop-text">
+            <strong>Trascina un PDF</strong>
+            <small>oppure clicca per sfogliare</small>
+          </span>
+        </button>
+      </div>
+      <nav class="nav" id="navRoot"></nav>
+      <div class="sidebar-foot">
+        <button class="side-tools" id="allToolsBtn"><span id="allToolsIcon"></span><span>Tutti gli strumenti</span></button>
+        <div class="engine-chip" id="enginePdfium"><span class="dot"></span><span>PDFium</span></div>
+        <div class="engine-chip" id="engineOcr"><span class="dot"></span><span>OCR Windows</span></div>
+        <div class="engine-chip" id="engineOffice"><span class="dot"></span><span>Office</span></div>
+        <div class="privacy-note">Locale · offline</div>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <aside class="thumbstrip glass" id="thumbStrip">
+        <div class="thumb-head" id="thumbHeadIcon"></div>
+        <div class="thumb-list" id="thumbList"></div>
+      </aside>
+
+      <div class="viewer glass" id="viewer">
+        <div class="viewer-head">
+          <div class="viewer-titles">
+            <span class="viewer-eyebrow">Anteprima documento</span>
+            <span class="viewer-sub" id="viewerSub">Apri un PDF per iniziare</span>
+          </div>
+          <div class="viewer-chips">
+            <span class="chip" id="chipTool">Lettura</span>
+            <span class="chip" id="chipSize">—</span>
+            <span class="chip" id="chipAnnots">0 annotazioni</span>
+          </div>
+        </div>
+
+        <div class="viewer-scroll" id="viewerScroll">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-glow"></div>
+            <div class="empty-mark">
+              <span class="mark-page"></span>
+              <span class="mark-glow"></span>
+            </div>
+            <h1>I tuoi PDF,<br><em>sul tuo computer.</em></h1>
+            <p>Leggi, annota, firma e organizza documenti.<br>Nessun file lascia il dispositivo.</p>
+            <div class="empty-actions">
+              <button class="btn primary large" id="emptyOpen"><span id="emptyOpenIcon"></span>Apri un PDF</button>
+              <button class="btn ghost large" id="emptyImages"><span id="emptyImagesIcon"></span>Da immagini</button>
+            </div>
+            <div class="feature-grid">
+              <div class="feature"><span class="f-ico" id="f1"></span><b>Lettura e voce</b><small>Zoom, ricerca e voce Windows</small></div>
+              <div class="feature"><span class="f-ico" id="f2"></span><b>Annota e firma</b><small>Testo, note, timbri e firma</small></div>
+              <div class="feature"><span class="f-ico" id="f3"></span><b>Pagine e OCR</b><small>Unisci, dividi, comprimi, digitalizza</small></div>
+              <div class="feature"><span class="f-ico" id="f4"></span><b>Sicurezza locale</b><small>Password, redazione, confronto</small></div>
+            </div>
+          </div>
+
+          <div class="page-frame" id="pageFrame" hidden>
+            <img id="pageImg" alt="Pagina PDF" draggable="false">
+            <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+            <div class="page-spinner" id="pageSpinner"><span></span></div>
+            <div class="form-field-layer" id="fieldLayer"></div>
+          </div>
+        </div>
+
+        <div class="viewer-dock glass" id="viewerDock" hidden>
+          <div class="dock-group">
+            <button class="dock-btn" id="prevPage" title="Pagina precedente"></button>
+            <div class="page-jump">
+              <input id="pageInput" value="1" inputmode="numeric">
+              <span>/</span>
+              <span id="pageTotal">1</span>
+            </div>
+            <button class="dock-btn" id="nextPage" title="Pagina successiva"></button>
+          </div>
+          <div class="dock-sep"></div>
+          <div class="dock-group">
+            <button class="dock-btn" id="zoomOut" title="Riduci"></button>
+            <button class="zoom-label" id="zoomLabel" title="Ctrl + rotella o pinch per lo zoom · clic per adattare">100%</button>
+            <button class="dock-btn" id="zoomIn" title="Ingrandisci"></button>
+            <button class="dock-btn wide" id="zoomFit">Adatta</button>
+          </div>
+          <div class="dock-sep"></div>
+          <div class="dock-group">
+            <button class="dock-btn" id="rotateLeft" title="Ruota a sinistra"></button>
+            <button class="dock-btn" id="rotateRight" title="Ruota a destra"></button>
+            <button class="dock-btn" id="deleteAnno" title="Elimina annotazione selezionata"></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="inspector glass">
+      <div class="inspector-tabs">
+        <button class="tab active" data-tab="tools">Strumenti</button>
+        <button class="tab" data-tab="annots">Annotazioni</button>
+        <button class="tab" data-tab="comments">Commenti</button>
+      </div>
+      <div class="inspector-body" id="inspectorBody">
+        <div class="tab-pane active" data-pane="tools">
+          <div class="pane-section">
+            <div class="pane-title"><span id="toolIcon"></span><span id="toolName">Lettura</span></div>
+            <div class="tool-hint" id="toolHint">Sfoglia il documento, usa lo zoom e cerca parole.</div>
+            <div class="swatches" id="swatches"></div>
+            <div class="slider-row"><label>Opacità</label><input type="range" id="opacityRange" min="5" max="100" value="35"><span id="opacityVal">35%</span></div>
+            <div class="slider-row"><label>Tratto</label><input type="range" id="strokeRange" min="1" max="14" value="3"><span id="strokeVal">3</span></div>
+            <div class="slider-row"><label>Testo</label><input type="range" id="fontRange" min="10" max="42" value="18"><span id="fontVal">18</span></div>
+          </div>
+
+          <div class="pane-section" id="stampSection">
+            <div class="pane-label">Timbro</div>
+            <div class="stamp-grid" id="stampGrid"></div>
+          </div>
+
+          <div class="pane-section" id="signSection">
+            <div class="pane-label">Firma</div>
+            <div class="sign-preview" id="signPreview"><span>Nessuna firma salvata</span></div>
+            <div class="mini-actions">
+              <button class="btn ghost small" id="signCreate">Disegna firma</button>
+              <button class="btn ghost small" id="signPhoto">Da foto</button>
+              <button class="btn ghost small" id="signClear">Rimuovi</button>
+            </div>
+          </div>
+
+          <div class="pane-section">
+            <div class="pane-label">Documento</div>
+            <dl class="meta-list">
+              <div><dt>Pagine</dt><dd id="metaPages">—</dd></div>
+              <div><dt>Dimensione</dt><dd id="metaSize">—</dd></div>
+              <div><dt>Titolo</dt><dd id="metaTitle">—</dd></div>
+              <div><dt>Autore</dt><dd id="metaAuthor">—</dd></div>
+            </dl>
+            <div class="mini-actions">
+              <button class="btn ghost small" id="metaEdit">Modifica metadati</button>
+            </div>
+          </div>
+
+          <div class="pane-section">
+            <div class="pane-label">Azioni rapide</div>
+            <div class="quick-grid">
+              <button class="quick" data-action="organize">Organizza</button>
+              <button class="quick" data-action="compress">Comprimi</button>
+              <button class="quick" data-action="compare">Confronta</button>
+              <button class="quick" data-action="password">Proteggi</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane" data-pane="annots">
+          <div class="pane-section">
+            <div class="pane-title"><span id="annotsTitleIcon"></span><span>Annotazioni</span></div>
+            <div class="pane-label" id="annotsPageLabel">Pagina 1</div>
+            <div class="annots-list" id="annotsList"></div>
+          </div>
+          <div class="pane-section">
+            <div class="pane-label">Tutte le pagine</div>
+            <div class="annots-all" id="annotsAll"></div>
+          </div>
+        </div>
+
+        <div class="tab-pane" data-pane="comments">
+          <div class="pane-section">
+            <div class="pane-title"><span id="commentsTitleIcon"></span><span>Revisione</span></div>
+            <div class="tool-hint">Crea un collegamento di rete locale per raccogliere commenti e firme.</div>
+            <div class="share-box" id="shareBox">
+              <div class="share-empty" id="shareEmpty">Nessuna sessione attiva.</div>
+              <div class="share-live" id="shareLive" hidden>
+                <label class="pane-label">Link di revisione</label>
+                <div class="share-link"><input id="shareUrl" readonly><button class="btn ghost small" id="copyShare">Copia</button></div>
+                <div class="share-stats"><span id="shareStats">0 commenti</span><button class="btn ghost small danger" id="stopShare">Termina</button></div>
+              </div>
+            </div>
+            <button class="btn primary wide" id="startShareBtn">Avvia revisione locale</button>
+            <div class="comments-list" id="commentsList"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <footer class="statusbar">
+      <span class="status-dot"></span>
+      <span id="statusText">Pronto</span>
+      <span class="status-sep"></span>
+      <span id="statusEngine">Motore PDFium in avvio…</span>
+      <span class="status-right">
+        <span id="statusTool">Strumento: Lettura</span>
+        <span class="status-sep"></span>
+        <span id="statusPrivacy">Locale · privato</span>
+      </span>
+    </footer>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <script src="core.js"></script>
+  <script src="demo.js"></script>
+  <script src="ui.js"></script>
+  <script src="tools.js"></script>
+</body>
+</html>
