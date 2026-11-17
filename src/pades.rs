@@ -56,7 +56,7 @@ const TENTATIVI_SPAZIO: usize = 3;
 const MARKER: &[u8] = b"OPENPDF-SIGNATURE-SLOT";
 const SUBFILTER: &str = "ETSI.CAdES.detached";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SignatureInfo {
     pub field: String,
     pub signer: String,
@@ -89,7 +89,7 @@ pub struct SignatureInfo {
     pub revocation: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SignOutcome {
     pub field: String,
     pub signer: String,

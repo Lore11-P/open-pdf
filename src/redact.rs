@@ -26,7 +26,7 @@ use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, serde::Serialize)]
 pub struct RedactReport {
     pub texts: usize,
     /// Immagini rimosse per intero.

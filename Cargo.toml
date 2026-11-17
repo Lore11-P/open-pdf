@@ -6,6 +6,12 @@ description = "Open PDF - lettore e editor PDF locale con interfaccia Glassmorph
 authors = ["Open PDF"]
 build = "build.rs"
 
+[[bin]]
+# Server MCP per gli agenti AI: stesso codice dell'app, avvio da console.
+name = "open-pdf-mcp"
+path = "src/mcp_server.rs"
+test = false
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

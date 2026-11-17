@@ -56,7 +56,6 @@ pub fn delete_lines(
     rects: &[[f32; 4]],
 ) -> Result<usize, String> {
     let mut doc = engine::open_doc(src, password)?;
-    let mut removed = 0usize;
     let remove = {
         let page = doc.pages().get(page_index as i32).map_err(|e| e.to_string())?;
         let space = engine::page_space(&page)?;
@@ -92,7 +91,7 @@ pub fn delete_lines(
     if remove.is_empty() {
         return Err("Nessun testo modificabile trovato in quest'area. Il contenuto potrebbe essere un'immagine o un oggetto raggruppato: usa la redazione per rimuoverlo.".into());
     }
-    removed = remove.len();
+    let removed = remove.len();
     {
         let mut page = doc.pages_mut().get(page_index as i32).map_err(|e| e.to_string())?;
         for index in remove.into_iter().rev() {

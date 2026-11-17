@@ -58,7 +58,7 @@ const DEFAULT_FONT_SIZE: f64 = 12.0;
 /// Riduzione orizzontale minima applicata per far entrare il testo.
 const MIN_H_SCALE: f64 = 0.5;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct EditReport {
     /// Numero di caratteri contenuti nelle operazioni sostituite.
     pub replaced_chars: usize,

@@ -98,10 +98,10 @@ cargo +stable-x86_64-pc-windows-gnu test
 
 ## Test
 
-La suite conta **113 test automatici** che coprono firma, verifica, redazione, modifica
-testo, conversione, OCR, condivisione e sicurezza. I test non usano Internet: TSA e
-responder OCSP sono simulati in locale con OpenSSL e `tiny_http`. Le chiavi e i
-certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.
+La suite conta **114 test automatici** che coprono firma, verifica, redazione, modifica
+testo, conversione, OCR, condivisione, sicurezza e il server MCP. I test non usano
+Internet: TSA e responder OCSP sono simulati in locale con OpenSSL e `tiny_http`. Le
+chiavi e i certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.
 
 ## Struttura
 
@@ -118,7 +118,46 @@ certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.
 | `src/engine.rs`, `src/ocr.rs` | rendering PDFium, OCR e voce |
 | `src/collab.rs` | revisione collaborativa in rete locale |
 | `src/main.rs` | comandi Tauri e stato della sessione |
+| `src/mcp_server.rs` | server MCP (stdio) per gli agenti AI |
 | `ui/` | interfaccia Focus Dark |
+
+## Uso da un agente AI (MCP)
+
+C'è un secondo eseguibile, `open-pdf-mcp.exe`, che espone le stesse funzioni a un
+agente AI tramite il **Model Context Protocol** (JSON-RPC 2.0 su stdio). Lavora in
+locale e non invia nulla in rete.
+
+```powershell
+$env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
+cargo +stable-x86_64-pc-windows-gnu build --release --bin open-pdf-mcp
+```
+
+Serve `pdfium.dll` accanto all'eseguibile (come per l'app) oppure la variabile
+`OPENPDF_PDFIUM` con il percorso della DLL. Registrazione in un client MCP (Claude
+Desktop, Claude Code, OpenCode e altri):
+
+```json
+{
+  "mcpServers": {
+    "open-pdf": {
+      "command": "C:\\percorso\\open-pdf-mcp.exe"
+    }
+  }
+}
+```
+
+Strumenti disponibili: `pdf_info`, `pdf_text`, `pdf_text_lines`, `pdf_search`,
+`pdf_render_page`, `pdf_from_text`, `pdf_edit_text`, `pdf_delete_text`, `pdf_redact`,
+`pdf_sanitize`, `pdf_sign_pades`, `pdf_verify_signatures`, `pdf_office_to_pdf`,
+`pdf_export`, `pdf_merge`, `pdf_extract_pages`, `pdf_rotate_page`, `pdf_compress`,
+`pdf_images_to_pdf`, `pdf_protect`.
+
+Regole comuni: gli indici di pagina partono da 0, i rettangoli sono normalizzati
+`[x, y, larghezza, altezza]` con origine in alto a sinistra, e ogni operazione di
+scrittura richiede un `output` separato: l'originale non viene mai sovrascritto.
+`pdf_text_lines` restituisce i rettangoli da passare a `pdf_edit_text` e
+`pdf_delete_text`; `pdf_render_page` restituisce un PNG come immagine, utile per le
+scansioni.
 
 ## Privacy
 

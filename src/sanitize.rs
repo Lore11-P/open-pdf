@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 /// Contatori delle rimozioni effettuate da [`sanitize_pdf`].
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, serde::Serialize)]
 pub struct SanitizeReport {
     /// Voci di metadati rimosse: `/Info`, XMP, `/PieceInfo`, `/Thumb`.
     pub metadata: usize,
