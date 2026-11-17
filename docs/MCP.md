@@ -24,7 +24,7 @@ scompattalo in una cartella stabile, per esempio `C:\OpenPDF`. L'archivio contie
 | --- | --- |
 | `open-pdf-mcp.exe` | il server MCP |
 | `pdfium.dll` | motore di rendering e scrittura PDF (obbligatorio) |
-| `LICENSE`, `pdfium-LICENSE.txt` | licenze MIT e BSD |
+| `LICENSE.txt`, `pdfium-LICENSE.txt` | licenze MIT e BSD |
 
 ### Opzione B — compilare da sorgente
 
