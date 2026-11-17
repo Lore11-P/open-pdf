@@ -134,8 +134,9 @@ agente AI tramite il **Model Context Protocol** (JSON-RPC 2.0 su stdio). Lavora 
 locale e non invia nulla in rete.
 
 **Installazione passo passo per Claude Code, Codex CLI, OpenCode, Claude Desktop,
-Cursor e VS Code: [docs/MCP.md](docs/MCP.md).** Ci sono l'archivio pronto per Windows,
-la configurazione di ogni client, l'elenco completo degli strumenti e gli esempi.
+Cursor e VS Code: [docs/MCP.md](docs/MCP.md).** Ci sono l'[archivio pronto per
+Windows](https://github.com/Lore11-P/open-pdf/releases), la configurazione di ogni
+client, l'elenco completo degli strumenti e gli esempi.
 
 ```powershell
 $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH

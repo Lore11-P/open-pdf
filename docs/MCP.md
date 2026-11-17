@@ -16,7 +16,8 @@ sono **Claude Code**, **Codex CLI**, **OpenCode**, **Claude Desktop**, **Cursor*
 
 ### Opzione A — archivio della release (consigliata)
 
-Scarica `open-pdf-mcp-windows-x64.zip` dalla pagina **Releases** del repository e
+Scarica `open-pdf-mcp-windows-x64.zip` dalla pagina
+[Releases](https://github.com/Lore11-P/open-pdf/releases) e
 scompattalo in una cartella stabile, per esempio `C:\OpenPDF`. L'archivio contiene:
 
 | File | A cosa serve |
