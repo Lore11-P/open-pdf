@@ -180,6 +180,44 @@ impl OfficeKind {
     }
 }
 
+/// Legge un file di testo semplice (txt, md, csv, log, json…) da impaginare.
+///
+/// Restituisce `None` per i formati binari e per HTML/XML, che conviene
+/// lasciare a LibreOffice: un file con byte di controllo o con NUL non è testo.
+fn testo_semplice(path: &Path) -> Option<String> {
+    const LIMITE_BYTE: u64 = 8 * 1024 * 1024;
+    let estensione = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if matches!(estensione.as_str(), "html" | "htm" | "xml" | "svg") {
+        return None;
+    }
+    let lunghezza = std::fs::metadata(path).ok()?.len();
+    if lunghezza == 0 || lunghezza > LIMITE_BYTE {
+        return None;
+    }
+    let byte = std::fs::read(path).ok()?;
+    if byte.contains(&0) {
+        return None;
+    }
+    // shortcut: i file non UTF-8 vengono letti come Latin-1, sufficiente per
+    // l'italiano; serve un decodificatore CP1252 solo per i caratteri
+    // tipografici di Windows (0x80-0x9F).
+    let testo = match std::str::from_utf8(&byte) {
+        Ok(testo) => testo.to_string(),
+        Err(_) => byte.iter().map(|b| *b as char).collect(),
+    };
+    let controllo = testo
+        .chars()
+        .filter(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+        .count();
+    if controllo * 50 > testo.chars().count() {
+        return None;
+    }
+    Some(testo)
+}
+
 /// Mappatura estensione -> motore. `None` significa "non Office": si passa a
 /// LibreOffice e, in ultima istanza, all'estrazione del solo testo.
 fn office_kind_for(path: &Path) -> Option<OfficeKind> {
@@ -546,6 +584,19 @@ pub fn office_to_pdf(path: &Path, dest: &Path) -> Result<ConvertResult, String> 
             }
         }
     } else {
+        // Testo semplice (txt, md, csv, log, json…): impaginato subito, senza
+        // dipendere da LibreOffice, che per questi formati serve a poco.
+        if let Some(contenuto) = testo_semplice(path) {
+            let titolo = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            text_to_pdf(dest, &titolo, &contenuto)?;
+            return Ok(convert_result(
+                dest,
+                "Creato un PDF impaginato dal file di testo.".into(),
+            ));
+        }
         // Estensioni non Office: comportamento invariato (LibreOffice, poi testo).
         match libreoffice_to_pdf(path, dest) {
             Ok(size) => {
@@ -898,6 +949,8 @@ fn extract_office_text(path: &Path) -> Result<String, String> {
             let mut xml = String::new();
             use std::io::Read;
             if f.read_to_string(&mut xml).is_ok() {
+                // Un a capo per paragrafo: senza, i run di testo si incollano.
+                let xml = xml.replace("</w:p>", "\n").replace("</a:p>", "\n");
                 let text = strip_tags(&xml);
                 if !text.trim().is_empty() {
                     out.push_str(&text);
@@ -1140,6 +1193,26 @@ mod tests {
         assert_eq!(office_kind_for(Path::new("letto.txt")), None);
         assert_eq!(office_kind_for(Path::new("archivio.zip")), None);
         assert_eq!(office_kind_for(Path::new("senza_estensione")), None);
+    }
+
+    #[test]
+    fn file_di_testo_diventa_pdf() {
+        let id = std::process::id();
+        let sorgente = std::env::temp_dir().join(format!("openpdf-nota-{id}.md"));
+        let destinazione = std::env::temp_dir().join(format!("openpdf-nota-{id}.pdf"));
+        std::fs::write(&sorgente, "# Promemoria\nRiga con accenti: perché, città.\n").unwrap();
+
+        let esito = office_to_pdf(&sorgente, &destinazione).unwrap();
+        assert!(destinazione.exists(), "PDF non creato");
+        assert!(esito.size > 0);
+        let testo = engine::page_text(&destinazione, 0, None).unwrap();
+        assert!(testo.contains("Promemoria"), "testo estratto: {testo}");
+        assert!(testo.contains("città"), "testo estratto: {testo}");
+
+        // Un archivio non è testo e non deve essere impaginato come tale.
+        assert!(testo_semplice(Path::new("archivio.zip")).is_none());
+        let _ = std::fs::remove_file(&sorgente);
+        let _ = std::fs::remove_file(&destinazione);
     }
 
     #[test]

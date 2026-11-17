@@ -45,6 +45,8 @@ il codice di Acrobat non è incluso né richiesto a runtime.
 - Immagini → PDF, pagina web → PDF (Microsoft Edge headless).
 - Office → PDF con automazione locale di Word/Excel/PowerPoint, fallback LibreOffice e,
   come ultima risorsa, estrazione del testo. Gestisce aree di stampa e Protected View.
+- File di testo → PDF senza Office: `.txt`, `.md`, `.csv`, `.log`, `.json` e simili
+  vengono impaginati direttamente (UTF-8, con ripiego su Latin-1).
 - Esportazione PDF → Word/Excel/PowerPoint/testo.
 - OCR con il motore di Windows e livello OCR invisibile per rendere ricercabili le
   scansioni.
@@ -98,7 +100,7 @@ cargo +stable-x86_64-pc-windows-gnu test
 
 ## Test
 
-La suite conta **114 test automatici** che coprono firma, verifica, redazione, modifica
+La suite conta **115 test automatici** che coprono firma, verifica, redazione, modifica
 testo, conversione, OCR, condivisione, sicurezza e il server MCP. I test non usano
 Internet: TSA e responder OCSP sono simulati in locale con OpenSSL e `tiny_http`. Le
 chiavi e i certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.

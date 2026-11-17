@@ -675,7 +675,7 @@ fn elenco_strumenti() -> Value {
         ),
         strumento(
             "pdf_office_to_pdf",
-            "Converte Word, Excel o PowerPoint in PDF usando Office locale, LibreOffice o, in ultima istanza, il testo estratto.",
+            "Converte Word, Excel, PowerPoint o un file di testo (txt, md, csv, log, json…) in PDF: usa Office locale, poi LibreOffice; i file di testo vengono impaginati direttamente.",
             json!({
                 "path": prop_ingresso("Percorso del documento Office"),
                 "output": prop_uscita()

@@ -196,7 +196,7 @@ async function openWeb() {
 async function openOffice() {
   if (!HAS_TAURI) return toast("Disponibile nell'app desktop.", 'warn');
   try {
-    const path = await invoke('pick_file', { filters: ['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'] });
+    const path = await invoke('pick_file', { filters: ['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'csv', 'txt', 'md'] });
     if (!path) return;
     setStatus('Conversione del file Office…', true);
     const info = await invoke('office_to_pdf_cmd', { path });
