@@ -115,6 +115,121 @@ fn wrap_plain(line: &str, max_chars: usize) -> Vec<String> {
     out
 }
 
+/// Markdown leggero → testo semplice: i titoli perdono i cancelletti, i punti diventano «•».
+fn markdown_semplice(contenuto: &str) -> String {
+    let mut righe = Vec::new();
+    for riga in contenuto.lines() {
+        let riga = riga.trim_end();
+        let pulita = if riga.starts_with('#') {
+            riga.trim_start_matches('#').trim_start().to_string()
+        } else if let Some(testo) = riga
+            .strip_prefix("- ")
+            .or_else(|| riga.strip_prefix("* "))
+            .or_else(|| riga.strip_prefix("+ "))
+        {
+            format!("• {testo}")
+        } else {
+            riga.to_string()
+        };
+        righe.push(pulita);
+    }
+    righe.join("\n")
+}
+
+/// Documento HTML autonomo, senza risorse esterne.
+fn documento_html(titolo: &str, contenuto: &str) -> String {
+    let mut corpo = String::new();
+    let mut in_elenco = false;
+    for riga in contenuto.lines() {
+        let riga = riga.trim_end();
+        if let Some(testo) = riga
+            .strip_prefix("- ")
+            .or_else(|| riga.strip_prefix("* "))
+            .or_else(|| riga.strip_prefix("+ "))
+        {
+            if !in_elenco {
+                corpo.push_str("<ul>");
+                in_elenco = true;
+            }
+            corpo.push_str(&format!("<li>{}</li>", xml_escape(testo)));
+            continue;
+        }
+        if in_elenco {
+            corpo.push_str("</ul>");
+            in_elenco = false;
+        }
+        if riga.trim().is_empty() {
+            continue;
+        }
+        let livello = riga.chars().take_while(|c| *c == '#').count();
+        let testo = riga.trim_start_matches('#').trim();
+        if livello > 0 {
+            let tag = if livello <= 2 { "h2" } else { "h3" };
+            corpo.push_str(&format!("<{tag}>{}</{tag}>", xml_escape(testo)));
+        } else {
+            corpo.push_str(&format!("<p>{}</p>", xml_escape(riga)));
+        }
+    }
+    if in_elenco {
+        corpo.push_str("</ul>");
+    }
+    format!(
+        "<!doctype html><html lang=\"it\"><head><meta charset=\"utf-8\"><title>{titolo}</title>\
+<style>body{{font:16px/1.55 \"Segoe UI\",system-ui,sans-serif;color:#111;background:#fff;\
+max-width:46rem;margin:3rem auto;padding:0 1.5rem}}h1{{font-size:2rem;line-height:1.15}}\
+h2{{font-size:1.35rem;margin:2rem 0 .5rem}}h3{{font-size:1.1rem;margin:1.5rem 0 .4rem}}\
+ul{{padding-left:1.2rem}}li{{margin:.25rem 0}}p{{margin:.6rem 0}}\
+</style></head><body><h1>{titolo}</h1>{corpo}</body></html>",
+        titolo = xml_escape(titolo)
+    )
+}
+
+/// Crea un documento da zero; il formato viene dall'estensione del file.
+pub fn documento_da_testo(
+    dest: &Path,
+    title: &str,
+    content: &str,
+) -> Result<ConvertResult, String> {
+    let estensione = dest
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_lowercase();
+    let semplice = markdown_semplice(content);
+    match estensione.as_str() {
+        "txt" => {
+            std::fs::write(dest, format!("{title}\n\n{semplice}\n"))
+                .map_err(|e| e.to_string())?;
+        }
+        "md" | "markdown" => {
+            std::fs::write(dest, format!("# {title}\n\n{content}\n"))
+                .map_err(|e| e.to_string())?;
+        }
+        "html" | "htm" => {
+            std::fs::write(dest, documento_html(title, content)).map_err(|e| e.to_string())?;
+        }
+        "pdf" => text_to_pdf(dest, title, &semplice)?,
+        "pptx" => scrivi_pptx(dest, &pptx_documento(title, content))?,
+        // Word riusa l'esportazione dal PDF: stesso testo, un file per volta.
+        "docx" => {
+            let intermedio = unique_temp_path("openpdf-doc", "pdf");
+            text_to_pdf(&intermedio, title, &semplice)?;
+            let esito = export_docx(&intermedio, dest, None);
+            let _ = std::fs::remove_file(&intermedio);
+            esito?;
+        }
+        altra => {
+            return Err(format!(
+                "Formato non supportato: {altra}. Usa pdf, pptx, docx, txt, md o html."
+            ))
+        }
+    }
+    Ok(convert_result(
+        dest,
+        format!("Documento {estensione} creato."),
+    ))
+}
+
 pub fn web_to_pdf(url: &str, dest: &Path) -> Result<ConvertResult, String> {
     let edge = engine::edge_path()
         .ok_or("Microsoft Edge non trovato: impossibile convertire pagine web in PDF.")?;
@@ -1082,9 +1197,9 @@ fn ppt_slide_xml(page_text: &str, page_no: usize) -> String {
     )
 }
 
-pub fn export_pptx(src: &Path, dest: &Path, password: Option<&str>) -> Result<ConvertResult, String> {
-    let pages = pdf_pages_text(src, password)?;
-    let count = pages.len().max(1);
+/// Scrive il pacchetto PPTX completo attorno alle slide già pronte.
+fn scrivi_pptx(dest: &Path, slides: &[String]) -> Result<(), String> {
+    let count = slides.len().max(1);
     let theme = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"OpenPDF\"><a:themeElements><a:clrScheme name=\"OpenPDF\"><a:dk1><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:dk1><a:lt1><a:sysClr val=\"window\" lastClr=\"FFFFFF\"/></a:lt1><a:dk2><a:srgbClr val=\"1F2937\"/></a:dk2><a:lt2><a:srgbClr val=\"F3F4F6\"/></a:lt2><a:accent1><a:srgbClr val=\"7C3AED\"/></a:accent1><a:accent2><a:srgbClr val=\"22D3EE\"/></a:accent2><a:accent3><a:srgbClr val=\"F472B6\"/></a:accent3><a:accent4><a:srgbClr val=\"34D399\"/></a:accent4><a:accent5><a:srgbClr val=\"FBBF24\"/></a:accent5><a:accent6><a:srgbClr val=\"60A5FA\"/></a:accent6><a:hlink><a:srgbClr val=\"2563EB\"/></a:hlink><a:folHlink><a:srgbClr val=\"7C3AED\"/></a:folHlink></a:clrScheme><a:fontScheme name=\"OpenPDF\"><a:majorFont><a:latin typeface=\"Segoe UI\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/></a:majorFont><a:minorFont><a:latin typeface=\"Segoe UI\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/></a:minorFont></a:fontScheme><a:fmtScheme name=\"OpenPDF\"><a:fillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln><a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln><a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>";
     let layout = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:sldLayout xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" type=\"blank\" preserve=\"1\"><p:cSld name=\"Blank\"><p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/><a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>";
     let master = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><p:sldMaster xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld><p:bg><p:bgRef idx=\"1001\"><a:schemeClr val=\"bg1\"/></p:bgRef></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/><a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr></p:spTree></p:cSld><p:clrMap bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/><p:sldLayoutIdLst><p:sldLayoutId id=\"2147483649\" r:id=\"rId1\"/></p:sldLayoutIdLst><p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>";
@@ -1115,12 +1230,169 @@ pub fn export_pptx(src: &Path, dest: &Path, password: Option<&str>) -> Result<Co
         pres_rels.push_str("</Relationships>");
         add_zip_file(z, "ppt/_rels/presentation.xml.rels", &pres_rels)?;
         for i in 1..=count {
-            let text = pages.get(i - 1).cloned().unwrap_or_default();
-            add_zip_file(z, &format!("ppt/slides/slide{i}.xml"), &ppt_slide_xml(&text, i))?;
+            let slide = slides
+                .get(i - 1)
+                .cloned()
+                .unwrap_or_else(|| ppt_slide_xml("", i));
+            add_zip_file(z, &format!("ppt/slides/slide{i}.xml"), &slide)?;
             add_zip_file(z, &format!("ppt/slides/_rels/slide{i}.xml.rels"), "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout\" Target=\"../slideLayouts/slideLayout1.xml\"/></Relationships>")?;
         }
         Ok(())
-    })?;
+    })
+}
+
+fn pptx_run(testo: &str, pt: u32, grassetto: bool, colore: &str) -> String {
+    format!(
+        "<a:r><a:rPr lang=\"it-IT\" sz=\"{}\" b=\"{}\" dirty=\"0\"><a:solidFill>\
+<a:srgbClr val=\"{colore}\"/></a:solidFill><a:latin typeface=\"Segoe UI\"/></a:rPr>\
+<a:t>{}</a:t></a:r>",
+        pt * 100,
+        u8::from(grassetto),
+        xml_escape(testo)
+    )
+}
+
+fn pptx_riquadro(id: u32, nome: &str, x: i64, y: i64, cx: i64, cy: i64, paragrafi: &str) -> String {
+    format!(
+        "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"{nome}\"/><p:cNvSpPr txBox=\"1\"/>\
+<p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/>\
+</a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln>\
+</p:spPr><p:txBody><a:bodyPr wrap=\"square\" rtlCol=\"0\"><a:normAutofit/></a:bodyPr>\
+<a:lstStyle/>{paragrafi}</p:txBody></p:sp>"
+    )
+}
+
+fn pptx_barra(id: u32, x: i64, y: i64) -> String {
+    format!(
+        "<p:sp><p:nvSpPr><p:cNvPr id=\"{id}\" name=\"Accento\"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>\
+<p:spPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"1097280\" cy=\"25400\"/></a:xfrm>\
+<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val=\"FFC42E\"/>\
+</a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>"
+    )
+}
+
+fn pptx_slide(corpo: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+<p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" \
+xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld><p:spTree>\
+<p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
+<p:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/>\
+<a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"0\" cy=\"0\"/></a:xfrm></p:grpSpPr>{corpo}\
+</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>"
+    )
+}
+
+fn pptx_slide_titolo(titolo: &str, intro: &[(bool, String)]) -> String {
+    let mut paragrafi = format!(
+        "<a:p><a:pPr><a:buNone/></a:pPr>{}</a:p>",
+        pptx_run(titolo, 44, true, "0B0F14")
+    );
+    let mut corpo = format!(
+        "{}<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"Titolo\"/><p:cNvSpPr txBox=\"1\"/>\
+<p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"838200\" y=\"2286000\"/>\
+<a:ext cx=\"10515600\" cy=\"1554480\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/>\
+</a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody>\
+<a:bodyPr wrap=\"square\" rtlCol=\"0\"><a:normAutofit/></a:bodyPr><a:lstStyle/>\
+{paragrafi}</p:txBody></p:sp>",
+        pptx_barra(4, 838200, 4023360)
+    );
+    if !intro.is_empty() {
+        paragrafi.clear();
+        for (punto, testo) in intro {
+            let voce = if *punto {
+                format!("<a:p><a:pPr marL=\"285750\" indent=\"-285750\"><a:buClr><a:srgbClr val=\"C08A00\"/>\
+</a:buClr><a:buFont typeface=\"Arial\"/><a:buChar char=\"•\"/></a:pPr>{}</a:p>",
+                    pptx_run(testo, 20, false, "3F4A57"))
+            } else {
+                format!(
+                    "<a:p><a:pPr><a:spcAft><a:spcPts val=\"800\"/></a:spcAft><a:buNone/></a:pPr>{}</a:p>",
+                    pptx_run(testo, 20, false, "3F4A57")
+                )
+            };
+            paragrafi.push_str(&voce);
+        }
+        corpo.push_str(&pptx_riquadro(5, "Sommario", 838200, 4206240, 10515600, 1280160, &paragrafi));
+    }
+    pptx_slide(&corpo)
+}
+
+/// Una slide per sezione: titolo, barra ambra e corpo con punti elenco veri.
+fn pptx_slide_sezione(titolo: &str, righe: &[(bool, String)]) -> String {
+    let mut paragrafi = String::new();
+    for (punto, testo) in righe {
+        let voce = if *punto {
+            format!(
+                "<a:p><a:pPr marL=\"342900\" indent=\"-342900\"><a:buClr><a:srgbClr val=\"C08A00\"/></a:buClr>\
+<a:buFont typeface=\"Arial\"/><a:buChar char=\"•\"/></a:pPr>{}</a:p>",
+                pptx_run(testo, 20, false, "1F2937")
+            )
+        } else {
+            format!(
+                "<a:p><a:pPr><a:spcAft><a:spcPts val=\"800\"/></a:spcAft><a:buNone/></a:pPr>{}</a:p>",
+                pptx_run(testo, 20, false, "1F2937")
+            )
+        };
+        paragrafi.push_str(&voce);
+    }
+    if paragrafi.is_empty() {
+        paragrafi.push_str(&format!(
+            "<a:p><a:pPr><a:buNone/></a:pPr>{}</a:p>",
+            pptx_run(" ", 20, false, "1F2937")
+        ));
+    }
+    let corpo = format!(
+        "{}<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"Titolo\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/>\
+</p:nvSpPr><p:spPr><a:xfrm><a:off x=\"838200\" y=\"548640\"/><a:ext cx=\"10515600\" cy=\"914400\"/>\
+</a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln>\
+</p:spPr><p:txBody><a:bodyPr wrap=\"square\" rtlCol=\"0\"><a:normAutofit/></a:bodyPr>\
+<a:lstStyle/><a:p><a:pPr><a:buNone/></a:pPr>{}</a:p></p:txBody></p:sp>{}",
+        pptx_barra(3, 838200, 1600200),
+        pptx_run(titolo, 32, true, "0B0F14"),
+        pptx_riquadro(4, "Corpo", 838200, 1874520, 10515600, 4434840, &paragrafi)
+    );
+    pptx_slide(&corpo)
+}
+
+/// Spezza il contenuto in sezioni (righe che iniziano con #) e prepara le slide.
+fn pptx_documento(titolo: &str, contenuto: &str) -> Vec<String> {
+    let mut intro: Vec<(bool, String)> = Vec::new();
+    let mut sezioni: Vec<(String, Vec<(bool, String)>)> = Vec::new();
+    for riga in contenuto.lines() {
+        let riga = riga.trim_end();
+        if riga.trim().is_empty() {
+            continue;
+        }
+        if riga.starts_with('#') {
+            sezioni.push((riga.trim_start_matches('#').trim().to_string(), Vec::new()));
+            continue;
+        }
+        let punto = riga
+            .strip_prefix("- ")
+            .or_else(|| riga.strip_prefix("* "))
+            .or_else(|| riga.strip_prefix("+ "));
+        let voce = (punto.is_some(), punto.unwrap_or(riga).to_string());
+        match sezioni.last_mut() {
+            Some((_, righe)) => righe.push(voce),
+            None => intro.push(voce),
+        }
+    }
+    let mut slides = vec![pptx_slide_titolo(titolo, &intro)];
+    for (nome, righe) in &sezioni {
+        slides.push(pptx_slide_sezione(nome, righe));
+    }
+    slides
+}
+
+pub fn export_pptx(src: &Path, dest: &Path, password: Option<&str>) -> Result<ConvertResult, String> {
+    let pages = pdf_pages_text(src, password)?;
+    let slides: Vec<String> = pages
+        .iter()
+        .enumerate()
+        .map(|(i, testo)| ppt_slide_xml(testo, i + 1))
+        .collect();
+    scrivi_pptx(dest, &slides)?;
     let size = std::fs::metadata(dest).map(|m| m.len()).unwrap_or(0);
     Ok(ConvertResult {
         path: dest.to_string_lossy().to_string(),
@@ -1213,6 +1485,42 @@ mod tests {
         assert!(testo_semplice(Path::new("archivio.zip")).is_none());
         let _ = std::fs::remove_file(&sorgente);
         let _ = std::fs::remove_file(&destinazione);
+    }
+
+    #[test]
+    fn documento_creato_da_zero_in_piu_formati() {
+        let id = std::process::id();
+        let cartella = std::env::temp_dir().join(format!("openpdf-doc-{id}"));
+        std::fs::create_dir_all(&cartella).unwrap();
+        let contenuto = "## Sezioni\n- primo punto\n- secondo punto\n\n## Contatti\n- info@esempio.it\n\nTesto con accenti: città, perché.";
+
+        let testo = cartella.join("nota.txt");
+        let esito = documento_da_testo(&testo, "Promemoria", contenuto).unwrap();
+        assert!(esito.size > 0);
+        let scritto = std::fs::read_to_string(&testo).unwrap();
+        assert!(scritto.starts_with("Promemoria\n\n"), "testo: {scritto}");
+        assert!(scritto.contains("Sezioni\n• primo punto"), "testo: {scritto}");
+        assert!(!scritto.contains("## ") && !scritto.contains("- primo"));
+
+        let html = cartella.join("nota.html");
+        documento_da_testo(&html, "Promemoria", contenuto).unwrap();
+        let pagina = std::fs::read_to_string(&html).unwrap();
+        assert!(pagina.contains("<h1>Promemoria</h1>"));
+        assert!(pagina.contains("<h2>Sezioni</h2>"));
+        assert!(pagina.contains("<li>primo punto</li>"));
+
+        let pdf = cartella.join("nota.pdf");
+        documento_da_testo(&pdf, "Promemoria", contenuto).unwrap();
+        assert!(std::fs::metadata(&pdf).unwrap().len() > 0);
+
+        // Titolo più una slide per sezione.
+        let pptx = cartella.join("nota.pptx");
+        documento_da_testo(&pptx, "Promemoria", contenuto).unwrap();
+        let mut archivio = zip::ZipArchive::new(std::fs::File::open(&pptx).unwrap()).unwrap();
+        assert!(archivio.by_name("ppt/slides/slide3.xml").is_ok());
+
+        assert!(documento_da_testo(&cartella.join("nota.xyz"), "X", "Y").is_err());
+        let _ = std::fs::remove_dir_all(&cartella);
     }
 
     #[test]

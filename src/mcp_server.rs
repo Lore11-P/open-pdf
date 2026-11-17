@@ -94,7 +94,7 @@ fn inizializza(parametri: &Value) -> Value {
             "title": "Open PDF",
             "version": env!("CARGO_PKG_VERSION")
         },
-        "instructions": "Legge, modifica, redige, pulisce, converte e firma PDF locali. \
+        "instructions": "Legge, modifica, redige, pulisce, converte, crea e firma documenti in locale. \
 Gli indici di pagina partono da 0. Ogni operazione di scrittura richiede un percorso \
 di output separato e non tocca mai il file di partenza."
     })
@@ -336,6 +336,14 @@ fn esegui(nome: &str, a: &Value) -> Result<Value, String> {
             let contenuto = obbligatorio(a, "text")?;
             convert::text_to_pdf(&destinazione, &titolo, &contenuto)?;
             Ok(testo(json!({"output": destinazione.display().to_string()})))
+        }
+
+        "doc_create" => {
+            let destinazione = percorso_arg(a, "output")?;
+            let titolo = obbligatorio(a, "title")?;
+            let contenuto = obbligatorio(a, "content")?;
+            let esito = convert::documento_da_testo(&destinazione, &titolo, &contenuto)?;
+            Ok(testo(valore(esito)?))
         }
 
         "pdf_office_to_pdf" => {
@@ -672,6 +680,16 @@ fn elenco_strumenti() -> Value {
                 "password": prop_password()
             }),
             json!(["path"])
+        ),
+        strumento(
+            "doc_create",
+            "Crea un documento da zero in PDF, PowerPoint, Word, testo, Markdown o HTML. Il formato viene dall'estensione di output; il contenuto accetta markdown leggero (## per le sezioni, - per i punti).",
+            json!({
+                "output": prop_uscita(),
+                "title": prop_ingresso("Titolo del documento"),
+                "content": prop_ingresso("Contenuto: markdown leggero con ## per le sezioni e - per i punti elenco")
+            }),
+            json!(["output", "title", "content"])
         ),
         strumento(
             "pdf_office_to_pdf",

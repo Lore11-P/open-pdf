@@ -48,6 +48,8 @@ il codice di Acrobat non è incluso né richiesto a runtime.
 - File di testo → PDF senza Office: `.txt`, `.md`, `.csv`, `.log`, `.json` e simili
   vengono impaginati direttamente (UTF-8, con ripiego su Latin-1).
 - Esportazione PDF → Word/Excel/PowerPoint/testo.
+- **Creazione di documenti da zero** in PDF, Word, PowerPoint, testo, Markdown e HTML
+  (anche dall'agente AI, con `doc_create`).
 - OCR con il motore di Windows e livello OCR invisibile per rendere ricercabili le
   scansioni.
 
@@ -100,7 +102,7 @@ cargo +stable-x86_64-pc-windows-gnu test
 
 ## Test
 
-La suite conta **115 test automatici** che coprono firma, verifica, redazione, modifica
+La suite conta **117 test automatici** che coprono firma, verifica, redazione, modifica
 testo, conversione, OCR, condivisione, sicurezza e il server MCP. I test non usano
 Internet: TSA e responder OCSP sono simulati in locale con OpenSSL e `tiny_http`. Le
 chiavi e i certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.
@@ -121,6 +123,8 @@ chiavi e i certificati in `tests/fixtures/` sono **usa e getta** e servono solo 
 | `src/collab.rs` | revisione collaborativa in rete locale |
 | `src/main.rs` | comandi Tauri e stato della sessione |
 | `src/mcp_server.rs` | server MCP (stdio) per gli agenti AI |
+| `docs/MCP.md` | installazione del server MCP per Claude Code, Codex CLI, OpenCode, Claude Desktop, Cursor e VS Code |
+| `examples/sport-per-disabili` | presentazione di esempio: PPTX, PDF e crediti delle foto |
 | `ui/` | interfaccia Focus Dark |
 
 ## Uso da un agente AI (MCP)
@@ -129,37 +133,38 @@ C'è un secondo eseguibile, `open-pdf-mcp.exe`, che espone le stesse funzioni a 
 agente AI tramite il **Model Context Protocol** (JSON-RPC 2.0 su stdio). Lavora in
 locale e non invia nulla in rete.
 
+**Installazione passo passo per Claude Code, Codex CLI, OpenCode, Claude Desktop,
+Cursor e VS Code: [docs/MCP.md](docs/MCP.md).** Ci sono l'archivio pronto per Windows,
+la configurazione di ogni client, l'elenco completo degli strumenti e gli esempi.
+
 ```powershell
 $env:PATH = "C:\msys64\mingw64\bin;" + $env:PATH
 cargo +stable-x86_64-pc-windows-gnu build --release --bin open-pdf-mcp
 ```
 
 Serve `pdfium.dll` accanto all'eseguibile (come per l'app) oppure la variabile
-`OPENPDF_PDFIUM` con il percorso della DLL. Registrazione in un client MCP (Claude
-Desktop, Claude Code, OpenCode e altri):
+`OPENPDF_PDFIUM` con il percorso della DLL.
 
-```json
-{
-  "mcpServers": {
-    "open-pdf": {
-      "command": "C:\\percorso\\open-pdf-mcp.exe"
-    }
-  }
-}
+Claude Code e Codex si registrano da terminale:
+
+```powershell
+claude mcp add open-pdf -- "C:\OpenPDF\open-pdf-mcp.exe"
+codex mcp add open-pdf -- "C:\OpenPDF\open-pdf-mcp.exe"
 ```
 
 Strumenti disponibili: `pdf_info`, `pdf_text`, `pdf_text_lines`, `pdf_search`,
-`pdf_render_page`, `pdf_from_text`, `pdf_edit_text`, `pdf_delete_text`, `pdf_redact`,
-`pdf_sanitize`, `pdf_sign_pades`, `pdf_verify_signatures`, `pdf_office_to_pdf`,
-`pdf_export`, `pdf_merge`, `pdf_extract_pages`, `pdf_rotate_page`, `pdf_compress`,
-`pdf_images_to_pdf`, `pdf_protect`.
+`pdf_render_page`, `pdf_from_text`, `doc_create`, `pdf_edit_text`, `pdf_delete_text`,
+`pdf_redact`, `pdf_sanitize`, `pdf_sign_pades`, `pdf_verify_signatures`,
+`pdf_office_to_pdf`, `pdf_export`, `pdf_merge`, `pdf_extract_pages`, `pdf_rotate_page`,
+`pdf_compress`, `pdf_images_to_pdf`, `pdf_protect`.
 
 Regole comuni: gli indici di pagina partono da 0, i rettangoli sono normalizzati
 `[x, y, larghezza, altezza]` con origine in alto a sinistra, e ogni operazione di
 scrittura richiede un `output` separato: l'originale non viene mai sovrascritto.
 `pdf_text_lines` restituisce i rettangoli da passare a `pdf_edit_text` e
 `pdf_delete_text`; `pdf_render_page` restituisce un PNG come immagine, utile per le
-scansioni.
+scansioni. `doc_create` crea un documento nuovo (`pdf`, `pptx`, `docx`, `txt`, `md`,
+`html`) da titolo e contenuto in markdown leggero.
 
 ## Privacy
 
