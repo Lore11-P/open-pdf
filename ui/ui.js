@@ -48,6 +48,7 @@ async function init() {
   buildStamps();
   buildToolAction();
   bindTopbar();
+  updateHistoryButtons();
   bindDock();
   bindTabs();
   bindOverlay();
@@ -88,6 +89,7 @@ function paintStaticIcons() {
     emptyOpenIcon: 'folder', emptyImagesIcon: 'image',
     prevPage: 'left', nextPage: 'right', zoomOut: 'zoomOut', zoomIn: 'zoomIn',
     rotateLeft: 'rotateL', rotateRight: 'rotateR', deleteAnno: 'trash',
+    undoBtn: 'undo', redoBtn: 'redo',
     f1: 'volume', f2: 'highlighter', f3: 'scan', f4: 'lock', allToolsIcon: 'grid'
   };
   for (const [id, name] of Object.entries(map)) {
@@ -260,6 +262,8 @@ function buildStamps() {
 }
 
 function bindTopbar() {
+  $('#undoBtn').addEventListener('click', undo);
+  $('#redoBtn').addEventListener('click', redo);
   $('#openBtn').addEventListener('click', openDialog);
   $('#openDrop').addEventListener('click', openDialog);
   $('#emptyOpen').addEventListener('click', openDialog);

@@ -63,6 +63,8 @@ const ICONS = {
   down: '<path d="m6 10 6 6 6-6"/>',
   edit: '<path d="m4 20 4-1 10-10a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M13 6l3 3"/>',
   download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/>',
+  undo: '<path d="M4 9h10a5 5 0 0 1 0 10h-2"/><path d="m8 5-4 4 4 4"/>',
+  redo: '<path d="M20 9H10a5 5 0 0 0 0 10h2"/><path d="m16 5 4 4-4 4"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   drag: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'
 };
@@ -715,6 +717,7 @@ function pushHistory() {
   state.undo.push(JSON.stringify(state.annotations));
   if (state.undo.length > 60) state.undo.shift();
   state.redo = [];
+  updateHistoryButtons();
 }
 function undo() {
   if (!state.undo.length) return;
@@ -724,6 +727,7 @@ function undo() {
   scheduleSave();
   refreshAnnots();
   drawOverlay();
+  updateHistoryButtons();
 }
 function redo() {
   if (!state.redo.length) return;
@@ -733,6 +737,13 @@ function redo() {
   scheduleSave();
   refreshAnnots();
   drawOverlay();
+  updateHistoryButtons();
+}
+function updateHistoryButtons() {
+  const annulla = $('#undoBtn');
+  const ripristina = $('#redoBtn');
+  if (annulla) annulla.disabled = !state.undo.length;
+  if (ripristina) ripristina.disabled = !state.redo.length;
 }
 function scheduleSave() {
   clearTimeout(state.saveTimer);
@@ -786,6 +797,7 @@ function duplicateSelected() {
   drawOverlay();
 }
 function refreshAnnots() {
+  updateHistoryButtons();
   const total = state.annotations.length;
   const chip = $('#chipAnnots');
   if (chip) chip.textContent = `${total} annotazion${total === 1 ? 'e' : 'i'}`;
