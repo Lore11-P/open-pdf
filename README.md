@@ -13,6 +13,18 @@ il codice di Acrobat non è incluso né richiesto a runtime.
 > **Stato:** applicazione Windows 10/11 a 64 bit. Su Linux e macOS **non è
 > disponibile** una build: vedi [Linux e macOS](#linux-e-macos).
 
+## Scarica
+
+```powershell
+git clone https://github.com/Lore11-P/open-pdf.git
+cd open-pdf
+```
+
+In alternativa, dalla pagina GitHub: **Code → Download ZIP**. Il server MCP già
+compilato per Windows è nella [release
+v1.0.0](https://github.com/Lore11-P/open-pdf/releases/latest); l'applicazione desktop
+va compilata dai sorgenti (vedi [Build da sorgente](#build-da-sorgente)).
+
 ---
 
 ## Funzionalità
