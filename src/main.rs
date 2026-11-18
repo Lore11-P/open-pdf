@@ -19,12 +19,19 @@ mod signature;
 mod state;
 mod textedit;
 mod types;
+mod update;
 
 use state::{AppState, Session};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::{Manager, State};
 use types::*;
+
+/// Evita il lampo della console quando si chiamano reg.exe e curl.exe.
+#[cfg(windows)]
+const NESSUNA_FINESTRA: u32 = 0x0800_0000;
 
 static STARTUP_PDF: OnceLock<Option<String>> = OnceLock::new();
 
@@ -909,6 +916,101 @@ fn startup_file() -> Option<String> {
     STARTUP_PDF.get().cloned().flatten()
 }
 
+fn chiave_registro_esiste(chiave: &str) -> bool {
+    std::process::Command::new("reg.exe")
+        .args(["query", chiave])
+        .creation_flags(NESSUNA_FINESTRA)
+        .output()
+        .map(|uscita| uscita.status.success())
+        .unwrap_or(false)
+}
+
+fn scrivi_registro(chiave: &str, nome: Option<&str>, valore: &str) -> bool {
+    let mut comando = std::process::Command::new("reg.exe");
+    comando.args(["add", chiave]);
+    match nome {
+        Some(nome) => comando.args(["/v", nome]),
+        None => comando.args(["/ve"]),
+    };
+    comando.args(["/t", "REG_SZ", "/d", valore, "/f"]);
+    comando
+        .creation_flags(NESSUNA_FINESTRA)
+        .output()
+        .map(|uscita| uscita.status.success())
+        .unwrap_or(false)
+}
+
+/// Registra Open PDF in «Apri con» di Windows. Scrive solo in HKCU e non cambia
+/// l'app predefinita: quella la sceglie l'utente. Restituisce true alla prima volta.
+#[tauri::command]
+fn associa_pdf() -> Result<bool, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = exe.to_string_lossy().to_string();
+    let nome = Path::new(&exe)
+        .file_name()
+        .map(|nome| nome.to_string_lossy().to_string())
+        .ok_or("Percorso dell'eseguibile non valido.")?;
+    let applicazione = format!("HKCU\\Software\\Classes\\Applications\\{nome}");
+    let prima_volta = !chiave_registro_esiste(&applicazione);
+    let comando = format!("\"{exe}\" \"%1\"");
+    let icona = format!("\"{exe}\",0");
+    let prog_id = "HKCU\\Software\\Classes\\OpenPDF.Document";
+    let capacita = format!("{prog_id}\\Capabilities");
+    let mut ok = true;
+    ok &= scrivi_registro(&applicazione, Some("FriendlyAppName"), "Open PDF");
+    ok &= scrivi_registro(
+        &format!("{applicazione}\\shell\\open\\command"),
+        None,
+        &comando,
+    );
+    ok &= scrivi_registro(&format!("{applicazione}\\SupportedTypes"), Some(".pdf"), "");
+    ok &= scrivi_registro(prog_id, None, "Documento PDF");
+    ok &= scrivi_registro(&format!("{prog_id}\\DefaultIcon"), None, &icona);
+    ok &= scrivi_registro(&format!("{prog_id}\\shell\\open\\command"), None, &comando);
+    ok &= scrivi_registro(&capacita, Some("ApplicationName"), "Open PDF");
+    ok &= scrivi_registro(
+        &capacita,
+        Some("ApplicationDescription"),
+        "Lettore ed editor PDF locale",
+    );
+    ok &= scrivi_registro(&capacita, Some("ApplicationIcon"), &icona);
+    ok &= scrivi_registro(
+        &format!("{capacita}\\FileAssociations"),
+        Some(".pdf"),
+        "OpenPDF.Document",
+    );
+    ok &= scrivi_registro(
+        "HKCU\\Software\\RegisteredApplications",
+        Some("Open PDF"),
+        "Software\\Classes\\OpenPDF.Document\\Capabilities",
+    );
+    ok &= scrivi_registro(
+        "HKCU\\Software\\Classes\\.pdf\\OpenWithProgids",
+        Some("OpenPDF.Document"),
+        "",
+    );
+    if !ok {
+        return Err("Windows non ha accettato l'associazione: riavvia Open PDF e riprova.".into());
+    }
+    Ok(prima_volta)
+}
+
+#[tauri::command]
+fn controlla_aggiornamenti() -> Result<update::Aggiornamento, String> {
+    update::controlla()
+}
+
+/// Scarica e avvia l'installer della release scelta, poi chiude l'app.
+#[tauri::command]
+fn installa_aggiornamento(url: String, app: tauri::AppHandle) -> Result<(), String> {
+    let installer = update::scarica(&url)?;
+    std::process::Command::new(&installer)
+        .spawn()
+        .map_err(|e| format!("Installer non avviato: {e}"))?;
+    app.exit(0);
+    Ok(())
+}
+
 fn main() {
     let startup = std::env::args()
         .skip(1)
@@ -987,7 +1089,10 @@ fn main() {
             create_form_fields_cmd,
             tts_status,
             open_url,
-            startup_file
+            startup_file,
+            associa_pdf,
+            controlla_aggiornamenti,
+            installa_aggiornamento
         ])
         .run(tauri::generate_context!())
         .expect("Impossibile avviare Open PDF");

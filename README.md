@@ -85,6 +85,12 @@ va compilata dai sorgenti (vedi [Build da sorgente](#build-da-sorgente)).
 - Password di apertura e permessi di stampa/copia/modifica con AES-128.
 - Confronto del testo tra due versioni dello stesso PDF.
 
+### Sistema
+- **Apri con Windows**: l'app si registra in `HKCU` e compare tra i programmi per
+  aprire i PDF; la scelta predefinita resta dell'utente («Apri con» → «Usa sempre»).
+- **Aggiornamenti con conferma**: al massimo un controllo al giorno delle release
+  GitHub, con le note di rilascio e l'installazione solo dopo un clic.
+
 ---
 
 ## Requisiti
@@ -114,7 +120,7 @@ cargo +stable-x86_64-pc-windows-gnu test
 
 ## Test
 
-La suite conta **117 test automatici** che coprono firma, verifica, redazione, modifica
+La suite conta **119 test automatici** che coprono firma, verifica, redazione, modifica
 testo, conversione, OCR, condivisione, sicurezza e il server MCP. I test non usano
 Internet: TSA e responder OCSP sono simulati in locale con OpenSSL e `tiny_http`. Le
 chiavi e i certificati in `tests/fixtures/` sono **usa e getta** e servono solo ai test.
@@ -185,6 +191,10 @@ Tutto avviene sul computer dell'utente. L'originale non viene mai sovrascritto: 
 modifiche sono salvate su copie in `%APPDATA%\OpenPDF`. La condivisione LAN espone il
 documento solo nella rete locale, protetto da un token casuale nel link.
 
+L'unica richiesta automatica verso Internet è il **controllo aggiornamenti**: una
+chiamata a `api.github.com` al massimo una volta al giorno, senza dati del documento.
+La finestra si chiude con «Più tardi» e non installa nulla senza conferma.
+
 ## Limiti dichiarati
 
 - La firma è Baseline **B-B** o **B-T**: non produce un DSS con certificati, OCSP e
@@ -203,6 +213,9 @@ documento solo nella rete locale, protetto da un token casuale nel link.
   per intero.
 - L'esportazione PDF → Office produce documenti con il testo estratto, senza
   ricostruire l'impaginazione.
+- Il controllo aggiornamenti richiede Internet e scarica solo dalle release ufficiali.
+  L'installazione aggiorna la copia installata dell'app, non la cartella portabile da
+  cui è partita.
 
 ## Linux e macOS
 

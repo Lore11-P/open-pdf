@@ -65,6 +65,12 @@ async function init() {
       applyEngineStatus(await invoke('engine_status'));
       const startup = await invoke('startup_file');
       if (startup) await openPath(startup);
+      invoke('associa_pdf')
+        .then((primaVolta) => {
+          if (primaVolta) toast('Open PDF ora compare tra i programmi per aprire i PDF.');
+        })
+        .catch(() => {});
+      setTimeout(controllaAggiornamenti, 4000);
     } catch (e) { setStatus('Motore PDF non disponibile', true); }
   }
   window.addEventListener('resize', () => {
@@ -1290,5 +1296,42 @@ function bindKeyboard() {
     if (e.key === 'PageDown' || e.key === 'ArrowRight') { if (state.doc) gotoPage(state.page + 1); return; }
     if (e.key === 'PageUp' || e.key === 'ArrowLeft') { if (state.doc) gotoPage(state.page - 1); return; }
   });
+}
+
+async function controllaAggiornamenti() {
+  if (!HAS_TAURI) return;
+  try {
+    const ultimo = Number(localStorage.getItem('openpdf.ultimoControllo') || 0);
+    if (Date.now() - ultimo < 86400000) return;
+    localStorage.setItem('openpdf.ultimoControllo', String(Date.now()));
+    const info = await invoke('controlla_aggiornamenti');
+    if (!info.disponibile) return;
+    if (!info.installer) {
+      toast(`Open PDF ${info.versione} è disponibile su GitHub.`, 'info', 6000);
+      return;
+    }
+    openModal({
+      title: 'Aggiornamento disponibile',
+      icon: 'download',
+      desc: `La versione ${info.versione} è pronta per l'installazione.`,
+      body: `<div class="field"><div class="modal-desc" style="white-space:pre-wrap;max-height:220px;overflow:auto">${esc(info.note || 'Nessuna nota di rilascio.')}</div></div>`,
+      footer: `<button class="btn ghost" data-close>Più tardi</button>
+               <button class="btn primary" id="updInstalla">${icon('download')}Scarica e installa</button>`,
+      onMount: (root) => {
+        $('#updInstalla', root).addEventListener('click', async () => {
+          const bottone = $('#updInstalla', root);
+          bottone.disabled = true;
+          bottone.textContent = 'Download in corso…';
+          try {
+            await invoke('installa_aggiornamento', { url: info.installer });
+          } catch (e) {
+            toast(normalizeError(e), 'error');
+            bottone.disabled = false;
+            bottone.innerHTML = `${icon('download')}Riprova`;
+          }
+        });
+      }
+    });
+  } catch { }
 }
 
