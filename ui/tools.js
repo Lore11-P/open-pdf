@@ -635,6 +635,9 @@ function openAllTools() {
       { id: 'save', label: 'Salva PDF', icon: 'save' },
       { id: 'voice', label: 'Leggi ad alta voce', icon: 'volume' },
       { id: 'signrequest', label: 'Richiedi firme', icon: 'signRequest' }
+    ]},
+    { title: 'Sistema', items: [
+      { id: 'updates', label: 'Aggiornamenti', icon: 'download' }
     ]}
   ];
   const groups = [...NAV, ...extras];
@@ -650,6 +653,7 @@ function openAllTools() {
         if (cmd === 'open') return openDialog();
         if (cmd === 'save') return openSaveModal();
         if (cmd === 'voice') return toggleVoice();
+        if (cmd === 'updates') return openUpdater();
         handleNav(cmd);
       }));
     }

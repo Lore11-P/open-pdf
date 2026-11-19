@@ -7,11 +7,19 @@ use std::path::PathBuf;
 const REPO: &str = "Lore11-P/open-pdf";
 
 #[derive(Debug, Serialize)]
+pub struct Rilascio {
+    pub versione: String,
+    pub installer: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct Aggiornamento {
+    pub attuale: String,
     pub disponibile: bool,
     pub versione: String,
     pub note: String,
     pub installer: Option<String>,
+    pub precedente: Option<Rilascio>,
 }
 
 /// Confronta due versioni tipo `1.2.3` o `v1.2.3`.
@@ -30,36 +38,69 @@ pub fn confronta_versioni(a: &str, b: &str) -> Ordering {
     x.cmp(&y)
 }
 
-/// Legge la risposta di `releases/latest` e sceglie l'installer.
+fn installer_di(release: &serde_json::Value) -> Option<String> {
+    release["assets"].as_array().and_then(|asset| {
+        asset.iter().find_map(|asset| {
+            let nome = asset["name"].as_str()?;
+            if nome.ends_with("-setup.exe") || nome.ends_with(".msi") {
+                asset["browser_download_url"].as_str().map(str::to_string)
+            } else {
+                None
+            }
+        })
+    })
+}
+
+/// Legge l'elenco delle release: la più recente e quella immediatamente precedente
+/// alla versione installata (per tornare indietro).
 pub fn leggi_release(json: &str, attuale: &str) -> Result<Aggiornamento, String> {
     let valore: serde_json::Value =
         serde_json::from_str(json).map_err(|e| format!("Risposta GitHub non valida: {e}"))?;
-    let tag = valore["tag_name"]
-        .as_str()
-        .filter(|tag| !tag.is_empty())
-        .ok_or("La release non ha un tag di versione.")?;
-    let installer = valore["assets"]
+    let elenco = valore
         .as_array()
-        .and_then(|asset| {
-            asset.iter().find_map(|asset| {
-                let nome = asset["name"].as_str()?;
-                if nome.ends_with("-setup.exe") || nome.ends_with(".msi") {
-                    asset["browser_download_url"].as_str().map(str::to_string)
-                } else {
-                    None
-                }
-            })
+        .ok_or("Risposta GitHub non valida: attesa una lista di release.")?;
+    let mut rilasci: Vec<(String, Option<String>, String)> = Vec::new();
+    for release in elenco {
+        if release["draft"].as_bool().unwrap_or(false)
+            || release["prerelease"].as_bool().unwrap_or(false)
+        {
+            continue;
+        }
+        let Some(tag) = release["tag_name"].as_str().filter(|tag| !tag.is_empty()) else {
+            continue;
+        };
+        rilasci.push((
+            tag.trim_start_matches(['v', 'V']).to_string(),
+            installer_di(release),
+            release["body"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(800)
+                .collect(),
+        ));
+    }
+    let piu_recente = rilasci
+        .iter()
+        .max_by(|a, b| confronta_versioni(&a.0, &b.0))
+        .ok_or("Nessuna release pubblicata.")?;
+    let precedente = rilasci
+        .iter()
+        .filter(|(versione, installer, _)| {
+            installer.is_some() && confronta_versioni(versione, attuale) == Ordering::Less
+        })
+        .max_by(|a, b| confronta_versioni(&a.0, &b.0))
+        .map(|(versione, installer, _)| Rilascio {
+            versione: versione.clone(),
+            installer: installer.clone().unwrap_or_default(),
         });
     Ok(Aggiornamento {
-        disponibile: confronta_versioni(tag, attuale) == Ordering::Greater,
-        versione: tag.trim_start_matches(['v', 'V']).to_string(),
-        note: valore["body"]
-            .as_str()
-            .unwrap_or_default()
-            .chars()
-            .take(800)
-            .collect(),
-        installer,
+        attuale: attuale.to_string(),
+        disponibile: confronta_versioni(&piu_recente.0, attuale) == Ordering::Greater,
+        versione: piu_recente.0.clone(),
+        note: piu_recente.2.clone(),
+        installer: piu_recente.1.clone(),
+        precedente,
     })
 }
 
@@ -73,7 +114,7 @@ fn esegui_curl(argomenti: &[&str]) -> Result<std::process::Output, String> {
 
 /// Interroga GitHub: nessun dato locale viene inviato, solo la richiesta HTTP.
 pub fn controlla() -> Result<Aggiornamento, String> {
-    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=30");
     let output = esegui_curl(&[
         "-sSL",
         "--max-time",
@@ -132,24 +173,50 @@ mod tests {
     }
 
     #[test]
-    fn release_letta_e_installer_scelto() {
-        let json = r#"{
-            "tag_name": "v1.1.0",
-            "body": "Associazione PDF e aggiornamenti.",
-            "assets": [
-                {"name": "open-pdf-mcp-windows-x64.zip", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.1.0/open-pdf-mcp-windows-x64.zip"},
-                {"name": "Open PDF_1.1.0_x64-setup.exe", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.1.0/Open PDF_1.1.0_x64-setup.exe"}
-            ]
-        }"#;
+    fn release_letta_e_versioni_scelte() {
+        let json = r#"[
+            {
+                "tag_name": "v1.2.0",
+                "body": "Frecce di annulla.",
+                "assets": [
+                    {"name": "open-pdf-mcp-windows-x64.zip", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.2.0/open-pdf-mcp-windows-x64.zip"},
+                    {"name": "Open.PDF_1.2.0_x64-setup.exe", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.2.0/Open.PDF_1.2.0_x64-setup.exe"}
+                ]
+            },
+            {
+                "tag_name": "v1.1.1",
+                "body": "Apri con Windows.",
+                "assets": [
+                    {"name": "Open.PDF_1.1.1_x64-setup.exe", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.1.1/Open.PDF_1.1.1_x64-setup.exe"}
+                ]
+            },
+            {
+                "tag_name": "v1.0.0",
+                "body": "Prima release del server MCP.",
+                "assets": [
+                    {"name": "open-pdf-mcp-windows-x64.zip", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v1.0.0/open-pdf-mcp-windows-x64.zip"}
+                ]
+            },
+            {
+                "tag_name": "v9.0.0",
+                "draft": true,
+                "assets": [
+                    {"name": "Open.PDF_9.0.0_x64-setup.exe", "browser_download_url": "https://github.com/Lore11-P/open-pdf/releases/download/v9.0.0/Open.PDF_9.0.0_x64-setup.exe"}
+                ]
+            }
+        ]"#;
         let esito = leggi_release(json, "1.0.0").unwrap();
         assert!(esito.disponibile);
-        assert_eq!(esito.versione, "1.1.0");
-        assert_eq!(
-            esito.installer.as_deref(),
-            Some("https://github.com/Lore11-P/open-pdf/releases/download/v1.1.0/Open PDF_1.1.0_x64-setup.exe")
-        );
+        assert_eq!(esito.attuale, "1.0.0");
+        assert_eq!(esito.versione, "1.2.0");
+        assert!(esito.installer.as_deref().unwrap().ends_with("Open.PDF_1.2.0_x64-setup.exe"));
+        // La 1.0.0 non ha installer: non è una versione a cui tornare.
+        assert!(esito.precedente.is_none());
 
-        let vecchia = leggi_release(json, "1.1.0").unwrap();
-        assert!(!vecchia.disponibile);
+        let aggiornato = leggi_release(json, "1.2.0").unwrap();
+        assert!(!aggiornato.disponibile);
+        let precedente = aggiornato.precedente.expect("versione precedente mancante");
+        assert_eq!(precedente.versione, "1.1.1");
+        assert!(precedente.installer.ends_with("Open.PDF_1.1.1_x64-setup.exe"));
     }
 }

@@ -1305,37 +1305,70 @@ function bindKeyboard() {
 async function controllaAggiornamenti() {
   if (!HAS_TAURI) return;
   try {
-    const ultimo = Number(localStorage.getItem('openpdf.ultimoControllo') || 0);
-    if (Date.now() - ultimo < 86400000) return;
-    localStorage.setItem('openpdf.ultimoControllo', String(Date.now()));
     const info = await invoke('controlla_aggiornamenti');
-    if (!info.disponibile) return;
-    if (!info.installer) {
-      toast(`Open PDF ${info.versione} è disponibile su GitHub.`, 'info', 6000);
-      return;
-    }
-    openModal({
-      title: 'Aggiornamento disponibile',
-      icon: 'download',
-      desc: `La versione ${info.versione} è pronta per l'installazione.`,
-      body: `<div class="field"><div class="modal-desc" style="white-space:pre-wrap;max-height:220px;overflow:auto">${esc(info.note || 'Nessuna nota di rilascio.')}</div></div>`,
-      footer: `<button class="btn ghost" data-close>Più tardi</button>
-               <button class="btn primary" id="updInstalla">${icon('download')}Scarica e installa</button>`,
-      onMount: (root) => {
-        $('#updInstalla', root).addEventListener('click', async () => {
-          const bottone = $('#updInstalla', root);
-          bottone.disabled = true;
-          bottone.textContent = 'Download in corso…';
-          try {
-            await invoke('installa_aggiornamento', { url: info.installer });
-          } catch (e) {
-            toast(normalizeError(e), 'error');
-            bottone.disabled = false;
-            bottone.innerHTML = `${icon('download')}Riprova`;
+    if (info.disponibile) apriAggiornamenti(info);
+  } catch { }
+}
+
+async function openUpdater() {
+  if (!HAS_TAURI) return toast('Gli aggiornamenti sono disponibili nell\'app desktop.', 'info');
+  try {
+    setStatus('Controllo aggiornamenti…', true);
+    const info = await invoke('controlla_aggiornamenti');
+    setStatus('Pronto');
+    apriAggiornamenti(info);
+  } catch (e) {
+    setStatus('Pronto');
+    toast(normalizeError(e), 'error');
+  }
+}
+
+async function installaVersione(url) {
+  try {
+    await invoke('installa_aggiornamento', { url });
+  } catch (e) {
+    toast(normalizeError(e), 'error');
+  }
+}
+
+function apriAggiornamenti(info) {
+  const puoAggiornare = info.disponibile && info.installer;
+  const precedente = info.precedente && info.precedente.installer ? info.precedente : null;
+  const righe = [
+    `Versione installata: <b>${esc(info.attuale)}</b>`,
+    info.disponibile
+      ? `Ultima release: <b>${esc(info.versione)}</b>`
+      : 'Hai già la versione più recente.'
+  ];
+  openModal({
+    title: puoAggiornare ? 'Aggiornamento disponibile' : 'Aggiornamenti',
+    icon: 'download',
+    desc: puoAggiornare
+      ? `Open PDF ${info.versione} è pronto per l'installazione.`
+      : 'Controllo delle release pubblicate su GitHub.',
+    body: `<div class="field">
+      ${righe.map(riga => `<div class="modal-desc">${riga}</div>`).join('')}
+      ${puoAggiornare && info.note ? `<div class="modal-desc" style="white-space:pre-wrap;max-height:200px;overflow:auto;margin-top:10px">${esc(info.note)}</div>` : ''}
+      ${precedente ? `<div class="modal-desc" style="margin-top:10px">Puoi tornare alla ${esc(precedente.versione)} in qualsiasi momento da qui.</div>` : ''}
+    </div>`,
+    footer: [
+      '<button class="btn ghost" data-close>Mantieni la corrente</button>',
+      precedente ? `<button class="btn ghost" id="updPrecedente">Torna alla ${esc(precedente.versione)}</button>` : '',
+      puoAggiornare ? `<button class="btn primary" id="updInstalla">Aggiorna a ${esc(info.versione)}</button>` : ''
+    ].join(''),
+    onMount: (root) => {
+      if (puoAggiornare) {
+        $('#updInstalla', root).addEventListener('click', () => installaVersione(info.installer));
+      }
+      if (precedente) {
+        $('#updPrecedente', root).addEventListener('click', async () => {
+          const domanda = `Verrà installata la versione ${precedente.versione} al posto della ${info.attuale}. Il download richiede qualche secondo. Continuare?`;
+          if (await confirmDialog('Tornare alla versione precedente?', domanda, `Torna alla ${precedente.versione}`, false)) {
+            await installaVersione(precedente.installer);
           }
         });
       }
-    });
-  } catch { }
+    }
+  });
 }
 

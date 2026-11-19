@@ -88,8 +88,9 @@ va compilata dai sorgenti (vedi [Build da sorgente](#build-da-sorgente)).
 ### Sistema
 - **Apri con Windows**: l'app si registra in `HKCU` e compare tra i programmi per
   aprire i PDF; la scelta predefinita resta dell'utente («Apri con» → «Usa sempre»).
-- **Aggiornamenti con conferma**: al massimo un controllo al giorno delle release
-  GitHub, con le note di rilascio e l'installazione solo dopo un clic.
+- **Aggiornamenti con conferma**: controllo delle release GitHub a ogni avvio, con le
+  note di rilascio, la scelta «Aggiorna» o «Mantieni la corrente» e il ritorno alla
+  versione precedente.
 
 ---
 
@@ -192,8 +193,8 @@ modifiche sono salvate su copie in `%APPDATA%\OpenPDF`. La condivisione LAN espo
 documento solo nella rete locale, protetto da un token casuale nel link.
 
 L'unica richiesta automatica verso Internet è il **controllo aggiornamenti**: una
-chiamata a `api.github.com` al massimo una volta al giorno, senza dati del documento.
-La finestra si chiude con «Più tardi» e non installa nulla senza conferma.
+chiamata a `api.github.com` **a ogni avvio**, senza dati del documento. La finestra si
+chiude con «Mantieni la corrente» e non installa nulla senza conferma.
 
 ## Limiti dichiarati
 
